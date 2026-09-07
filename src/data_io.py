@@ -183,6 +183,16 @@ def prepare_dataframe(df: pd.DataFrame, require_attribute: bool = False) -> pd.D
     if has_attr:
         cols = cols + ["attribute"]
 
+    has_ctype = "condition_type" in df.columns
+    if not has_ctype:
+        for alias in ("condition_role", "storage_type", "loai_dieu_kien"):
+            if alias in df.columns:
+                df = df.rename(columns={alias: "condition_type"})
+                has_ctype = True
+                break
+    if has_ctype and "condition_type" not in cols:
+        cols = cols + ["condition_type"]
+
     out = df[cols].copy()
     out["batch"] = out["batch"].astype(str).str.strip()
     out["condition"] = out["condition"].astype(str).str.strip()
@@ -195,6 +205,7 @@ def prepare_dataframe(df: pd.DataFrame, require_attribute: bool = False) -> pd.D
     else:
         out = out.dropna(subset=["time", "response", "batch", "condition"])
         out = out.sort_values(["condition", "batch", "time"]).reset_index(drop=True)
+    out = ensure_condition_type(out)
     return out
 
 
@@ -344,3 +355,58 @@ def filter_condition(df: pd.DataFrame, condition: Optional[str]) -> pd.DataFrame
     if condition is None or condition == "(Tất cả / All)":
         return df.copy()
     return df[df["condition"] == condition].copy()
+
+
+# ---------------------------------------------------------------------------
+# Condition type (first-class role for LT / accelerated / intermediate)
+# ---------------------------------------------------------------------------
+
+CONDITION_TYPE_ALIASES = {
+    "condition_type": [
+        "condition_type",
+        "condition_role",
+        "storage_type",
+        "loai_dieu_kien",
+        "loại_điều_kiện",
+        "role",
+    ],
+}
+
+
+def infer_condition_type(condition: str) -> str:
+    """Infer long-term / intermediate / accelerated / other from condition label."""
+    from src.study_design import classify_condition_role
+
+    return classify_condition_role(condition)
+
+
+def ensure_condition_type(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure dataframe has condition_type column (inferred if missing)."""
+    out = df.copy()
+    # Normalize alias column names
+    lower_map = {_normalize_key(c): c for c in out.columns}
+    for alias in CONDITION_TYPE_ALIASES["condition_type"]:
+        key = _normalize_key(alias)
+        if key in lower_map and "condition_type" not in out.columns:
+            out = out.rename(columns={lower_map[key]: "condition_type"})
+            break
+    if "condition_type" not in out.columns:
+        if "condition" in out.columns:
+            out["condition_type"] = out["condition"].astype(str).map(infer_condition_type)
+        else:
+            out["condition_type"] = "other"
+    else:
+        out["condition_type"] = out["condition_type"].astype(str).str.strip().str.lower()
+        # Fill blanks from condition label
+        blank = out["condition_type"].isin(["", "nan", "none", "other"])
+        if blank.any() and "condition" in out.columns:
+            out.loc[blank, "condition_type"] = (
+                out.loc[blank, "condition"].astype(str).map(infer_condition_type)
+            )
+    return out
+
+
+def method_tag_for_condition_type(condition_type: str) -> str:
+    from src.study_design import method_tag_for_role
+
+    return method_tag_for_role(condition_type)
