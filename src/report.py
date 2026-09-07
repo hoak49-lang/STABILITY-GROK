@@ -34,10 +34,8 @@ METHODS_NOTE = (
     "Methods / Phương pháp: Shelf life = time where the one-sided confidence "
     "bound of the mean meets the specification (ICH Q1E). Multi-attribute "
     "overall shelf life = minimum of attribute shelf lives (conservative). "
-    "Method tags: LT-Q1E (long-term primary), LHCT (accelerated supportive), "
-    "Arrhenius-supportive (exploratory). Study design planning aligned with "
-    "ICH Q1D (Full/Bracketing/Matrixing) is supportive only. "
-    "References: ICH Q1A(R2); ICH Q1D; ICH Q1E."
+    "References: ICH Q1A(R2) Stability Testing of New Drug Substances and "
+    "Products; ICH Q1E Evaluation of Stability Data."
 )
 
 
@@ -64,7 +62,6 @@ def build_html_report(
     notes: str = "",
     attribute_sections: Optional[List[Dict[str, Any]]] = None,
     summary_html: str = "",
-    extra_sections_html: str = "",
 ) -> str:
     """Assemble a self-contained HTML report.
 
@@ -166,15 +163,15 @@ footer {{ margin-top: 32px; font-size: 12px; color: #666; }}
 {shelf_html}
 {('<h2>5. Poolability (ANCOVA)</h2>' + pool_html) if pool_html else ''}
 {attr_blocks}
-{extra_sections_html}
 <h2>Biểu đồ / Plots</h2>
 {fig_blocks if fig_blocks else '<p><em>Plots are available in the app UI / Biểu đồ xem trong ứng dụng.</em></p>'}
 <h2>Ghi chú / Notes</h2>
 <p>{notes}</p>
 <p>{METHODS_NOTE}</p>
 <footer>
-References: ICH Q1A(R2); ICH Q1D Bracketing &amp; Matrixing; ICH Q1E Evaluation of Stability Data.
-ICH-STABILITY-GROK — supportive analysis only / chỉ hỗ trợ phân tích — NOT regulatory certification.
+References: ICH Q1A(R2) Stability Testing of New Drug Substances and Products;
+ICH Q1E Evaluation of Stability Data.
+ICH-STABILITY-GROK — supportive analysis only / chỉ hỗ trợ phân tích.
 </footer>
 </body>
 </html>
