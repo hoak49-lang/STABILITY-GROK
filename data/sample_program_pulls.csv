@@ -1,0 +1,8 @@
+pull_id,study_id,batch,condition,strength,pack,time_months,due_date,status,result_response,result_attribute,completed_date,notes
+ST-XYZ-001-T0-B1-LT,ST-XYZ-001,B1,30C/75%RH (long-term zone IV),5 mg,Alu-Alu blister,0.0,2026-02-19,Completed,100.1,Assay,2026-02-19,
+ST-XYZ-001-T3-B1-LT,ST-XYZ-001,B1,30C/75%RH (long-term zone IV),5 mg,Alu-Alu blister,3.0,2026-05-21,Completed,99.4,Assay,2026-05-21,
+ST-XYZ-001-T6-B1-LT,ST-XYZ-001,B1,30C/75%RH (long-term zone IV),5 mg,Alu-Alu blister,6.0,2026-08-21,Completed,98.7,Assay,2026-08-21,
+ST-XYZ-001-T9-B1-LT,ST-XYZ-001,B1,30C/75%RH (long-term zone IV),5 mg,Alu-Alu blister,9.0,2026-09-10,Due,,Assay,,
+ST-XYZ-001-T6-B2-LT,ST-XYZ-001,B2,30C/75%RH (long-term zone IV),20 mg,HDPE bottle 100s,6.0,2026-08-28,Overdue,,Assay,,
+ST-XYZ-001-T12-B1-LT,ST-XYZ-001,B1,30C/75%RH (long-term zone IV),5 mg,Alu-Alu blister,12.0,2026-11-06,Upcoming,,Assay,,
+ST-ABC-001-T3-C1-ACC,ST-ABC-001,C1,40C/75%RH (accelerated),50 mg,Blister,3.0,2026-09-12,Due,,Assay,,
