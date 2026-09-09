@@ -268,26 +268,30 @@ def callout(text: str, kind: str = "info") -> None:
 
 
 def metric_cards(cards: list[dict]) -> None:
-    """Render a row of metric cards.
+    """Render a row of metric cards via native Streamlit layout.
 
-    Each card: {label, value, hint?, tone?} where tone in ok|warn|danger|neutral.
+    Each card: {label, value, hint?, tone?} where tone in ok|warn|danger|neutral|info.
+    Uses st.columns + st.metric (no custom HTML) so Streamlit Cloud sanitizer cannot
+    break the markup. Tone is accepted for call-site compatibility; hint is shown
+    as a caption when present.
     """
-    parts = ['<div class="ich-metrics">']
-    for c in cards:
-        tone = c.get("tone", "neutral")
-        hint = c.get("hint", "")
-        hint_html = f'<div class="hint">{hint}</div>' if hint else ""
-        parts.append(
-            f"""
-            <div class="ich-card {tone}">
-              <div class="label">{c.get("label", "")}</div>
-              <div class="value">{c.get("value", "—")}</div>
-              {hint_html}
-            </div>
-            """
-        )
-    parts.append("</div>")
-    st.markdown("".join(parts), unsafe_allow_html=True)
+    if not cards:
+        return
+    cols = st.columns(len(cards))
+    for col, c in zip(cols, cards):
+        with col:
+            label = str(c.get("label", "") or "")
+            value = c.get("value", "—")
+            if value is None:
+                value = "—"
+            st.metric(label=label, value=str(value))
+            hint = c.get("hint")
+            tone = c.get("tone", "neutral")
+            if hint:
+                st.caption(str(hint))
+            elif tone in ("warn", "danger"):
+                # Light tone signal without relying on HTML classes
+                st.caption(str(tone))
 
 
 def pill(text: str, tone: str = "info") -> str:

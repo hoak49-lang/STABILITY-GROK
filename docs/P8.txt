@@ -1,0 +1,209 @@
+ P.8. ĐỘ ỔN ĐỊNH THÀNH PHẨM
+ MẪU BÁO CÁO HỒ SƠ ACTD ASEAN
+
+ Khung tham khảo để điền dữ liệu sản phẩm. Không phải biểu mẫu bắt buộc hoặc báo cáo đã có kết quả
+ nghiên cứu.
+
+ Tên thuốc: […]
+
+ Dược chất - hàm lượng: […]
+
+ Dạng bào chế: […]
+
+ Nhà sản xuất và địa điểm sản xuất: […]
+
+ Quy cách đóng gói: […]
+
+ Mã báo cáo/phiên bản: […]
+
+ Ngày chốt dữ liệu: […]
+
+ Người lập - người kiểm tra - người phê duyệt: […]
+
+
+ P.8.1. Tóm tắt và kết luận về độ ổn định
+
+ A. Mục tiêu và thiết kế nghiên cứu
+ Đánh giá độ ổn định của sản phẩm […] trong bao bì […] nhằm hỗ trợ hạn dùng và điều kiện bảo quản đề
+ xuất.
+
+ Đề cương áp dụng: [Mã, phiên bản, ngày phê duyệt].
+
+   Số lô        Ngày sản xuất      Cỡ lô/quy mô   Hàm lượng       Bao bì, quy cách         Ngày bắt đầu
+
+
+   […]          […]                […]            […]             […]                      […]
+
+
+
+   Nghiên cứu                    Nhiệt độ/độ ẩm      Lịch kiểm tra theo đề cương     Thời gian đã có dữ liệu
+
+
+   Dài hạn                       […]                 […]                             […]
+
+
+   Lão hóa cấp tốc               […]                 […]                             […]
+
+
+   Nghiên cứu bổ sung, nếu       […]                 […]                             […]
+   áp dụng
+
+
+ Thiết kế rút gọn, nếu áp dụng: [Mô tả bracketing/matrixing, tổ hợp được thử và cơ sở lựa chọn].
+
+
+
+
+Mẫu tham khảo P.8 - ACTD ASEAN                                                                            Trang 1
+ P.8.1. Tóm tắt và kết luận về độ ổn định (tiếp)
+
+ B. Tổng hợp kết quả và đánh giá
+ Các chỉ tiêu đã kiểm tra: […].
+
+ Xu hướng thay đổi theo thời gian: […].
+
+ Khác biệt giữa các lô, hàm lượng hoặc bao bì: […].
+
+ Kết quả ngoài tiêu chuẩn, ngoài xu hướng hoặc sai lệch: […].
+
+ Phân tích thống kê và cơ sở ngoại suy, nếu áp dụng: […].
+
+ Giới hạn của dữ liệu hiện có: […].
+
+
+ C. Kết luận
+ Tại ngày chốt dữ liệu […], đã có dữ liệu dài hạn đến […] tháng và cấp tốc đến […] tháng.
+
+ Căn cứ kết quả và đánh giá nêu trên, đề xuất:
+
+ Hạn dùng: […] tháng.
+
+ Điều kiện bảo quản ghi nhãn: […].
+
+ Bao bì áp dụng: […].
+
+ Hạn dùng sau mở nắp/pha hoàn nguyên, nếu áp dụng: […].
+
+ Cơ sở hỗ trợ đề xuất: […].
+
+
+
+
+Mẫu tham khảo P.8 - ACTD ASEAN                                                              Trang 2
+ P.8.2. Đề cương và cam kết độ ổn định sau phê duyệt
+
+ A. Đề cương tiếp tục nghiên cứu
+
+   Nội dung                                             Kế hoạch
+
+
+   Các lô tiếp tục theo dõi                             […]
+
+
+   Các lô bổ sung                                       […]
+
+
+   Bao bì/hàm lượng áp dụng                             […]
+
+
+   Điều kiện bảo quản mẫu                               […]
+
+
+   Mốc kiểm tra còn lại                                 […]
+
+
+   Chỉ tiêu và giới hạn chấp nhận                       […]
+
+
+   Phương pháp phân tích                                […]
+
+
+   Đơn vị chịu trách nhiệm                              […]
+
+
+
+
+ B. Cam kết
+ Cơ sở […] cam kết thực hiện chương trình độ ổn định theo đề cương […], gồm:
+
+ 1. Tiếp tục các nghiên cứu đang tiến hành đến thời điểm […].
+
+ 2. Bổ sung các lô […] theo kế hoạch […].
+
+ 3. Thực hiện chương trình theo dõi độ ổn định thường xuyên: [Số lô/năm, cách lựa chọn hàm lượng và bao
+ bì, phép thử].
+
+ 4. Điều tra kết quả bất thường, đánh giá ảnh hưởng đến sản phẩm và thực hiện báo cáo theo yêu cầu áp
+ dụng.
+
+ Đại diện có thẩm quyền: […]
+
+ Chức danh - ngày ký - chữ ký: […]
+
+
+
+
+Mẫu tham khảo P.8 - ACTD ASEAN                                                                    Trang 3
+ P.8.3. Dữ liệu độ ổn định
+
+ A. Tiêu chuẩn và phương pháp
+
+   Chỉ tiêu            Giới hạn trong hạn        Đơn vị      Phương pháp/phiên bản         Tham chiếu thẩm định
+                       dùng
+
+
+   […]                 […]                       […]         […]                           […]
+
+
+
+
+ B. Bảng kết quả
+ Lập riêng cho từng lô, hàm lượng, bao bì và điều kiện nghiên cứu.
+
+ Số lô: […]
+ Bao bì: […]
+ Điều kiện nghiên cứu: […]
+
+   Chỉ tiêu                      Giới hạn          Ban đầu         Mốc […]           Mốc […]         Mốc […]
+
+
+   […]                           […]               […]             […]               […]             […]
+
+
+   […]                           […]               […]             […]               […]             […]
+
+
+   […]                           […]               […]             […]               […]             […]
+
+
+ Ghi kết quả định lượng bằng số và đơn vị. Phân biệt rõ “chưa đến hạn thử”, “không thử theo đề cương” và
+ “không áp dụng”.
+
+
+ C. Tài liệu kèm theo
+ - Phiếu kết quả kiểm nghiệm và báo cáo nghiên cứu.
+
+ - Đồ thị xu hướng, phân tích thống kê nếu có.
+
+ - Hồ sơ sai lệch, điều tra và đánh giá ảnh hưởng.
+
+ - Thông tin phương pháp phân tích và thẩm định hoặc tham chiếu đến phần tương ứng của hồ sơ.
+
+
+ P.8.4. Bảo đảm dây chuyền lạnh, nếu áp dụng
+ [Mô tả điều kiện vận chuyển, bảo quản và phân phối, phương tiện theo dõi nhiệt độ, xử lý sai lệch và trách
+ nhiệm thực hiện.]
+
+ Nếu không áp dụng: [Ghi rõ và nêu lý do].
+
+
+ Tài liệu tham khảo
+ ACTD - Phần II: Chất lượng, mục P.8
+
+ ASEAN Guideline on Stability Study of Drug Product (R2)
+
+
+
+
+Mẫu tham khảo P.8 - ACTD ASEAN                                                                             Trang 4
+

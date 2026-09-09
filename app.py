@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -22,7 +23,17 @@ from src.arrhenius import (
     estimate_rates_by_condition,
     fit_arrhenius,
     normalize_rates_table,
+    project_shelf_life,
     project_shelf_life_zero_order,
+)
+from src.session_io import export_session, import_session
+from src.p8_report import (
+    P8Fields,
+    P8Header,
+    build_p8_from_app,
+    build_p8_html,
+    demo_p8_fields,
+    export_p8_pdf_bytes,
 )
 from src.attributes import (
     AttributeConfig,
@@ -76,6 +87,7 @@ inject_styles()
 _DEFAULTS = {
     "df": None,
     "data_label": None,
+    "manual_editor_df": None,
     "default_spec": 90.0,
     "default_dir": "decreasing",
     "condition": "(Tất cả / All)",
@@ -92,6 +104,15 @@ _DEFAULTS = {
     "study_design": None,
     "sampling_matrix": None,
     "stability_program": None,
+    "kinetics_order": "zero",
+    "arr_r_unit": "kcal",
+    "arr_predict_temp": 25.0,
+    "arr_include_rh": False,
+    "arr_include_light": False,
+    "arr_predict_rh": 60.0,
+    "arr_predict_light": 0.0,
+    "p8_fields": None,
+    "data_loaded_mode": None,
 }
 
 
@@ -281,6 +302,156 @@ def _render_single_attr_detail(attr_res, alpha: float, figures: List) -> None:
         _show_figure(fig)
 
 
+
+def _render_p8_page(analysis=None) -> None:
+    """Dedicated P.8 ACTD ASEAN drafting UI.
+
+    Works even when ``analysis`` is None — Demo P.8 download remains available.
+    """
+    brand_header(
+        "8 · P.8 HSĐK / ACTD ASEAN",
+        "Độ ổn định thành phẩm · drafting aid · không phải hồ sơ đã phê duyệt",
+    )
+    section_header("P8", "Báo cáo P.8 (ACTD ASEAN)", "P.8 dossier drafting aid")
+    callout(
+        "Công cụ <b>hỗ trợ soạn thảo</b> khung P.8 ACTD ASEAN cho HSĐK — "
+        "<b>không</b> phải hồ sơ đã phê duyệt / không thay thế đánh giá QA/RA. "
+        "Trường thiếu = <code>[…]</code>. "
+        "Có thể tải <b>Demo P.8</b> ngay cả khi chưa chạy phân tích.",
+        kind="warn",
+    )
+
+    # Seed / edit header fields in session
+    if st.session_state.get("p8_fields") is None:
+        st.session_state["p8_fields"] = P8Fields().to_dict()
+    p8_dict = dict(st.session_state["p8_fields"] or {})
+    hdr = dict(p8_dict.get("header") or {})
+
+    with st.expander("P.8 header & kết luận (chỉnh tay)", expanded=False):
+        h1, h2 = st.columns(2)
+        with h1:
+            hdr["ten_thuoc"] = st.text_input(
+                "Tên thuốc", value=str(hdr.get("ten_thuoc") or ""), key="p8_ten"
+            )
+            hdr["duoc_chat_ham_luong"] = st.text_input(
+                "Dược chất - hàm lượng",
+                value=str(hdr.get("duoc_chat_ham_luong") or ""),
+                key="p8_dc",
+            )
+            hdr["dang_bao_che"] = st.text_input(
+                "Dạng bào chế", value=str(hdr.get("dang_bao_che") or ""), key="p8_dbc"
+            )
+            hdr["nha_san_xuat"] = st.text_input(
+                "Nhà sản xuất", value=str(hdr.get("nha_san_xuat") or ""), key="p8_nsx"
+            )
+        with h2:
+            hdr["quy_cach_dong_goi"] = st.text_input(
+                "Quy cách đóng gói",
+                value=str(hdr.get("quy_cach_dong_goi") or ""),
+                key="p8_qc",
+            )
+            hdr["ma_bao_cao"] = st.text_input(
+                "Mã báo cáo/phiên bản",
+                value=str(hdr.get("ma_bao_cao") or ""),
+                key="p8_ma",
+            )
+            hdr["nguoi_lap_kiem_phe_duyet"] = st.text_input(
+                "Người lập / kiểm / phê duyệt",
+                value=str(hdr.get("nguoi_lap_kiem_phe_duyet") or ""),
+                key="p8_nguoi",
+            )
+            p8_dict["dieu_kien_bao_quan"] = st.text_input(
+                "Điều kiện bảo quản ghi nhãn",
+                value=str(p8_dict.get("dieu_kien_bao_quan") or ""),
+                key="p8_dkbq",
+            )
+            p8_dict["cold_chain"] = st.text_area(
+                "P.8.4 Cold chain",
+                value=str(p8_dict.get("cold_chain") or "Không áp dụng / Not applicable."),
+                key="p8_cold",
+            )
+        p8_dict["header"] = hdr
+        st.session_state["p8_fields"] = p8_dict
+
+    design = st.session_state.get("study_design")
+    program = st.session_state.get("stability_program")
+    analysis_for_p8 = analysis
+    p8_html = None
+    p8_pdf = None
+    try:
+        p8_obj = build_p8_from_app(
+            p8_fields=P8Fields.from_dict(st.session_state.get("p8_fields")),
+            df=st.session_state.get("df"),
+            analysis=analysis_for_p8,
+            study_design=design if isinstance(design, dict) else None,
+            program=program if isinstance(program, dict) else None,
+            data_label=st.session_state.get("data_label"),
+        )
+        st.session_state["p8_fields"] = p8_obj.to_dict()
+        p8_html = build_p8_html(p8_obj)
+        p8_pdf = export_p8_pdf_bytes(p8_obj)
+    except Exception as exc:
+        st.error(f"P.8 build/export lỗi — section vẫn hiển thị. Chi tiết: {exc}")
+
+    c_p1, c_p2, c_p3 = st.columns(3)
+    with c_p1:
+        if p8_html is not None:
+            st.download_button(
+                "⬇ P.8 HTML",
+                p8_html,
+                file_name="P8_ACTD_ASEAN_draft.html",
+                mime="text/html",
+                use_container_width=True,
+                key="dl_p8_html",
+            )
+        else:
+            st.caption("⬇ P.8 HTML — chưa sẵn sàng (lỗi build).")
+    with c_p2:
+        if p8_pdf is not None:
+            st.download_button(
+                "⬇ P.8 PDF",
+                p8_pdf,
+                file_name="P8_ACTD_ASEAN_draft.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="dl_p8_pdf",
+            )
+        else:
+            st.caption("⬇ P.8 PDF — chưa sẵn sàng (lỗi build).")
+    with c_p3:
+        if st.button("Demo P.8 từ mẫu", key="p8_demo_btn"):
+            try:
+                demo = demo_p8_fields()
+                st.session_state["p8_demo_html"] = build_p8_html(demo)
+                st.session_state["p8_demo_pdf"] = export_p8_pdf_bytes(demo)
+            except Exception as exc:
+                st.error(f"Demo P.8 lỗi: {exc}")
+    if st.session_state.get("p8_demo_html"):
+        st.download_button(
+            "⬇ Demo P.8 HTML",
+            st.session_state["p8_demo_html"],
+            file_name="P8_demo.html",
+            mime="text/html",
+            key="dl_p8_demo_html",
+        )
+        st.download_button(
+            "⬇ Demo P.8 PDF",
+            st.session_state.get("p8_demo_pdf") or b"",
+            file_name="P8_demo.pdf",
+            mime="application/pdf",
+            key="dl_p8_demo_pdf",
+        )
+    with st.expander("Xem trước P.8 (text)", expanded=False):
+        st.caption("Tải HTML/PDF để xem đầy đủ định dạng ACTD.")
+        if p8_html:
+            st.code(
+                p8_html[:2500] + ("\n…" if len(p8_html) > 2500 else ""),
+                language="html",
+            )
+        else:
+            st.warning("Chưa có bản xem trước P.8 (build lỗi). Dùng Demo P.8 từ mẫu.")
+
+
 # ---------------------------------------------------------------------------
 # Sidebar — step navigator + status
 # ---------------------------------------------------------------------------
@@ -297,6 +468,7 @@ with st.sidebar:
         "5 · Gộp lô / Pooling",
         "6 · Kết quả / Results",
         "7 · Báo cáo / Report",
+        "8 · P.8 HSĐK / ACTD ASEAN",
         "Arrhenius (exploratory)",
         "Giới thiệu / About",
     ]
@@ -327,6 +499,41 @@ with st.sidebar:
             st.caption(st.session_state["data_label"])
 
     st.markdown("---")
+    with st.expander("Phiên làm việc / Session JSON", expanded=False):
+        st.caption(
+            "Export/Import: design + program + df + model + kinetics + P.8 meta. "
+            "Analysis figures không lưu — chạy lại bước 6 sau khi import."
+        )
+        try:
+            sess_json = export_session(dict(st.session_state))
+        except Exception as exc:
+            sess_json = "{}"
+            st.warning(f"Export error: {exc}")
+        st.download_button(
+            "⬇ Export session JSON",
+            sess_json,
+            file_name="ich_stability_session.json",
+            mime="application/json",
+            use_container_width=True,
+            key="sidebar_export_session",
+        )
+        up_sess = st.file_uploader(
+            "Import session JSON",
+            type=["json"],
+            key="sidebar_import_session",
+        )
+        if up_sess is not None and st.button("Nạp phiên / Load session", key="sidebar_load_session"):
+            try:
+                updates, warns = import_session(up_sess.read())
+                for k, v in updates.items():
+                    st.session_state[k] = v
+                for w in warns:
+                    st.warning(w)
+                st.success("Đã nạp phiên / Session imported.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
     callout(
         "⚠️ Hỗ trợ phân tích thống kê — <b>không</b> phải hệ thống chứng nhận "
         "cho hồ sơ đăng ký.<br/>"
@@ -394,51 +601,93 @@ trong một phiên — shelf life sản phẩm = **min** các chỉ tiêu.
 # ===========================================================================
 if step.startswith("Arrhenius"):
     brand_header(
-        "Arrhenius — Exploratory / Thăm dò",
-        "SUPPORTIVE only · không thay thế đánh giá dài hạn ICH Q1A/Q1E",
+        "Arrhenius / Kinetics — Exploratory / Thăm dò",
+        "SUPPORTIVE only · zero/first/second · T+RH MVP · không thay thế Q1E",
     )
     callout(
         "<b>Method tag: Arrhenius-supportive</b> — SUPPORTIVE / HỖ TRỢ ONLY — "
         "Không thay thế nghiên cứu ổn định dài hạn ICH Q1A(R2) / Q1E. "
-        "Mô hình: ln(k) = ln(A) − Ea/(R·T). "
-        "k có thể nhập trực tiếp hoặc ước lượng ≈ |độ dốc OLS| (proxy bậc không). "
-        "Kết quả mang tính thăm dò / exploratory.",
+        "Mô hình: ln(k) = ln(A) − Ea/(R·T) [+ B·RH/100] [+ C·light]. "
+        "Kết quả mang tính thăm dò / exploratory. Xem <code>docs/KINETICS_AUDIT.md</code>.",
         kind="warn",
     )
     with st.expander("Giả định / Assumptions (đọc trước)", expanded=False):
         st.markdown(
             """
-- **Rate proxy:** khi suy từ dữ liệu ổn định, k ≈ |OLS slope| của response theo thời gian
-  (động học **bậc không** trên thang mô hình). Không phải lựa chọn mô hình động học đầy đủ.
-- **Bậc một:** module này không fit first-order; có thể nhập k đã biến đổi bên ngoài nếu cần.
-- Bỏ qua độ ẩm / bao bì / yếu tố khác ngoài nhiệt độ.
-- Shelf life dự phóng từ k ngoại suy dùng **giao trung bình bậc không** (intercept → spec) —
-  **không** phải biên tin cậy một phía ICH Q1E.
+- **Rate proxy:** k ≈ |OLS slope| trên thang bậc không / ln(Y) / 1/Y.
+- **T+RH MVP:** ln(k)=ln(A)−Ea/(R·T)+B·(RH/100) — thực nghiệm, không phải mô hình hấp thụ ẩm đầy đủ.
+- **Light:** hạng mục tuyến tính thô trên ln(k); không thay thế ICH Q1B.
+- Shelf life dự phóng = giao trung bình từ k ngoại suy — **không** phải CI một phía ICH Q1E.
 - Kết quả **SUPPORTIVE / exploratory only**.
             """
         )
 
-    section_header("A", "Hằng số khí & nhiệt độ dự đoán", "Gas constant & prediction T")
-    c1, c2, c3 = st.columns([1, 1, 1])
+    section_header("A", "Cấu hình động học", "Kinetics settings")
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
+        order_label = st.selectbox(
+            "Bậc phản ứng / Reaction order",
+            ["zero (bậc không)", "first (bậc một)", "second (bậc hai, hiếm)"],
+            index={"zero": 0, "first": 1, "second": 2}.get(
+                st.session_state.get("kinetics_order", "zero"), 0
+            ),
+            key="arr_order_select",
+        )
+        kinetics_order = order_label.split()[0]
+        st.session_state["kinetics_order"] = kinetics_order
+    with c2:
         r_choice = st.selectbox(
             "Hằng số khí R / Gas constant R",
             ["kcal/(mol·K)", "kJ/(mol·K)"],
-            index=0,
-            help="Chọn đơn vị R → Ea báo cáo cùng hệ (kcal/mol hoặc kJ/mol).",
+            index=0 if st.session_state.get("arr_r_unit", "kcal") == "kcal" else 1,
+            key="arr_r_choice",
         )
-    r_unit = "kcal" if r_choice.startswith("kcal") else "kJ"
-    with c2:
+        r_unit = "kcal" if r_choice.startswith("kcal") else "kJ"
+        st.session_state["arr_r_unit"] = r_unit
+    with c3:
         predict_temp = st.number_input(
-            "Nhiệt độ dài hạn dự đoán / Long-term T (°C)",
+            "T dự đoán / Predict T (°C)",
             min_value=-20.0,
             max_value=80.0,
-            value=25.0,
+            value=float(st.session_state.get("arr_predict_temp", 25.0)),
             step=1.0,
-            help="Ví dụ 25°C (long-term) hoặc 30°C theo vùng khí hậu.",
+            key="arr_predict_temp_input",
         )
-    with c3:
-        st.caption(f"R unit key: **{r_unit}** · predict @ **{predict_temp:g}°C**")
+        st.session_state["arr_predict_temp"] = float(predict_temp)
+    with c4:
+        include_rh = st.checkbox(
+            "Mô hình T+RH MVP",
+            value=bool(st.session_state.get("arr_include_rh", False)),
+            key="arr_include_rh_cb",
+        )
+        include_light = st.checkbox(
+            "Hạng mục light MVP",
+            value=bool(st.session_state.get("arr_include_light", False)),
+            key="arr_include_light_cb",
+        )
+        st.session_state["arr_include_rh"] = include_rh
+        st.session_state["arr_include_light"] = include_light
+
+    c5, c6 = st.columns(2)
+    with c5:
+        predict_rh = st.number_input(
+            "RH dự đoán (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=float(st.session_state.get("arr_predict_rh", 60.0)),
+            disabled=not include_rh,
+            key="arr_predict_rh_input",
+        )
+        st.session_state["arr_predict_rh"] = float(predict_rh)
+    with c6:
+        predict_light = st.number_input(
+            "Light dự đoán (user units)",
+            min_value=0.0,
+            value=float(st.session_state.get("arr_predict_light", 0.0)),
+            disabled=not include_light,
+            key="arr_predict_light_input",
+        )
+        st.session_state["arr_predict_light"] = float(predict_light)
 
     section_header("B", "Nguồn tốc độ k", "Rate source")
     input_mode = st.radio(
@@ -460,7 +709,7 @@ if step.startswith("Arrhenius"):
             [
                 "Sample Arrhenius rates",
                 "Nhập tay / Manual table",
-                "Upload CSV (temp_c, k)",
+                "Upload CSV (temp_c, k [, rh, light])",
             ],
             horizontal=True,
             key="arr_k_src",
@@ -471,7 +720,7 @@ if step.startswith("Arrhenius"):
             st.caption("Sample: `data/sample_arrhenius_rates.csv` (toy Ea ≈ 18 kcal/mol).")
         elif src_k.startswith("Upload"):
             upk = st.file_uploader(
-                "Upload CSV tốc độ / rates (cột temp_c + k)",
+                "Upload CSV tốc độ / rates (cột temp_c + k ± rh_percent ± light)",
                 type=["csv", "xlsx", "xls"],
                 key="arr_rates_up",
             )
@@ -483,9 +732,9 @@ if step.startswith("Arrhenius"):
             else:
                 empty_state("Chưa tải file k", "Upload a rates CSV with temp_c and k.", "📂")
         else:
-            if "arr_editor_df" not in st.session_state:
+            if "arr_editor_df" not in st.session_state or st.session_state["arr_editor_df"] is None:
                 st.session_state["arr_editor_df"] = default_rates_editor_frame()
-            st.caption("Chỉnh bảng nhiệt độ (°C) và k — có thể thêm/xóa dòng.")
+            st.caption("Chỉnh bảng T (°C), k, RH%, light — giữ khi đổi bước.")
             edited = st.data_editor(
                 st.session_state["arr_editor_df"],
                 num_rows="dynamic",
@@ -504,10 +753,9 @@ if step.startswith("Arrhenius"):
                 st.error(str(exc))
 
     else:
-        # Derived from multi-condition stability data
         callout(
-            "Giả định: k ≈ |slope| OLS của response vs time (proxy bậc không / zero-order). "
-            "Cần ≥2 điều kiện nhiệt độ parse được từ cột condition (vd. 25C, 40C/75%RH).",
+            f"Giả định: k ≈ |slope| OLS trên thang <b>{kinetics_order}</b>. "
+            "Cần ≥2 điều kiện nhiệt độ parse được từ cột condition (vd. 25C/60%RH).",
             kind="info",
         )
         src = st.radio(
@@ -558,7 +806,7 @@ if step.startswith("Arrhenius"):
             else:
                 empty_state(
                     "Chưa có dữ liệu trong phiên",
-                    "Load data in step 1 · Dữ liệu, or choose Sample / Upload here.",
+                    "Load data in step 3 · Dữ liệu, or choose Sample / Upload here.",
                     "📋",
                 )
 
@@ -571,15 +819,22 @@ if step.startswith("Arrhenius"):
                 )
             with st.expander("Xem dữ liệu / Preview", expanded=False):
                 st.dataframe(df_arr, use_container_width=True, hide_index=True)
-            section_header("B2", "Tốc độ theo điều kiện", "Rates per condition (|slope|)")
-            rates = estimate_rates_by_condition(df_arr)
+            section_header("B2", "Tốc độ theo điều kiện", f"Rates per condition (|slope|, {kinetics_order})")
+            rates = estimate_rates_by_condition(df_arr, kinetics_order=kinetics_order)
             st.dataframe(rates, use_container_width=True, hide_index=True)
             if rates is not None and len(rates) and "intercept" in rates.columns:
-                # Prefer long-term-ish intercept (closest to predict_temp) for projection default
                 valid_r = rates.dropna(subset=["temp_c"])
                 if len(valid_r):
                     idx = (valid_r["temp_c"] - float(predict_temp)).abs().idxmin()
-                    intercept_for_proj = float(valid_r.loc[idx, "intercept"])
+                    # For first/second order, intercept is on transform scale —
+                    # convert to raw Y0 approx via exp / 1/x when possible
+                    raw_int = float(valid_r.loc[idx, "intercept"])
+                    if kinetics_order == "first":
+                        intercept_for_proj = float(np.exp(raw_int))
+                    elif kinetics_order == "second":
+                        intercept_for_proj = float(1.0 / raw_int) if raw_int != 0 else 100.0
+                    else:
+                        intercept_for_proj = raw_int
 
     section_header("C", "Kết quả Arrhenius", "Arrhenius results")
     if rates is None or len(rates) == 0:
@@ -589,14 +844,34 @@ if step.startswith("Arrhenius"):
             "🌡️",
         )
     else:
-        arr = fit_arrhenius(rates, r_unit=r_unit, predict_temp_c=float(predict_temp))
+        arr = fit_arrhenius(
+            rates,
+            r_unit=r_unit,
+            predict_temp_c=float(predict_temp),
+            include_rh=include_rh,
+            include_light=include_light,
+            predict_rh=float(predict_rh),
+            predict_light=float(predict_light),
+            kinetics_order=kinetics_order,
+        )
         st.info(arr.message)
         if arr.valid:
+            ea_ci = (
+                f"[{arr.ea_ci_low:.2f}, {arr.ea_ci_high:.2f}]"
+                if arr.ea_ci_low is not None
+                else "—"
+            )
+            k_ci = (
+                f"[{arr.predicted_k_ci_low:.4g}, {arr.predicted_k_ci_high:.4g}]"
+                if arr.predicted_k_ci_low is not None
+                else "—"
+            )
             metric_cards(
                 [
                     {
                         "label": f"Ea ({arr.ea_unit})",
                         "value": f"{arr.ea:.2f}",
+                        "hint": f"95% CI {ea_ci}",
                         "tone": "ok",
                     },
                     {
@@ -607,21 +882,27 @@ if step.startswith("Arrhenius"):
                     {
                         "label": "R²",
                         "value": f"{arr.r_squared:.4f}",
+                        "hint": arr.model_kind,
                         "tone": "ok",
                     },
                     {
-                        "label": f"k dự đoán @ {arr.predict_temp_c:g}°C",
+                        "label": f"k @ {arr.predict_temp_c:g}°C",
                         "value": f"{arr.predicted_k:.6g}",
-                        "hint": "Predicted rate",
+                        "hint": f"CI {k_ci}",
                         "tone": "info",
                     },
                 ]
             )
-            st.caption(
+            extra = (
                 f"R = {arr.r_gas:.6g} {arr.r_label} · "
-                f"Ea cũng ≈ {arr.ea_kcal_mol:.2f} kcal/mol / {arr.ea_kj_mol:.2f} kJ/mol · "
+                f"Ea ≈ {arr.ea_kcal_mol:.2f} kcal/mol / {arr.ea_kj_mol:.2f} kJ/mol · "
                 f"k@25°C = {arr.predicted_rate_at_25:.6g}"
             )
+            if arr.rh_coef_B is not None:
+                extra += f" · B(RH/100) = {arr.rh_coef_B:.4g}"
+            if arr.light_coef_C is not None:
+                extra += f" · C(light) = {arr.light_coef_C:.4g}"
+            st.caption(extra)
             fig = plot_arrhenius(arr, rates)
             _show_figure(fig)
             plt.close(fig)
@@ -632,7 +913,7 @@ if step.startswith("Arrhenius"):
                 "Optional shelf-life projection",
             )
             callout(
-                "CẢNH BÁO MẠNH / STRONG DISCLAIMER: đây là giao trung bình bậc không từ k ngoại suy — "
+                "CẢNH BÁO MẠNH / STRONG DISCLAIMER: giao trung bình từ k ngoại suy — "
                 "KHÔNG thay thế shelf life theo biên tin cậy một phía ICH Q1E từ dữ liệu dài hạn.",
                 kind="warn",
             )
@@ -642,12 +923,10 @@ if step.startswith("Arrhenius"):
                 key="arr_do_proj",
             )
             if do_proj:
-                # Prefer session attribute/spec settings when available
                 def_spec = float(st.session_state.get("spec_limit", 90.0))
                 def_dir = st.session_state.get("direction", "decreasing")
                 cfgs = st.session_state.get("attr_configs") or {}
                 if cfgs:
-                    # use first selected attribute config if present
                     sel = st.session_state.get("selected_attributes") or list(cfgs.keys())
                     if sel and sel[0] in cfgs:
                         def_spec = float(cfgs[sel[0]].get("spec_limit", def_spec))
@@ -656,7 +935,7 @@ if step.startswith("Arrhenius"):
                 p1, p2, p3 = st.columns(3)
                 with p1:
                     proj_intercept = st.number_input(
-                        "Hệ số chặn / Intercept (t=0)",
+                        "Y0 / Intercept (raw scale)",
                         value=float(
                             intercept_for_proj
                             if intercept_for_proj is not None
@@ -682,30 +961,40 @@ if step.startswith("Arrhenius"):
                         key="arr_proj_dir",
                     )
                 proj_dir = "decreasing" if proj_dir_label.startswith("dec") else "increasing"
-                proj = project_shelf_life_zero_order(
+                proj = project_shelf_life(
                     rate_k=float(arr.predicted_k),
                     intercept=float(proj_intercept),
                     spec_limit=float(proj_spec),
                     direction=proj_dir,
                     temp_c=float(arr.predict_temp_c),
+                    kinetics_order=kinetics_order,
+                    rate_k_low=arr.predicted_k_ci_low,
+                    rate_k_high=arr.predicted_k_ci_high,
                 )
                 st.warning(proj.message)
                 if proj.valid and proj.shelf_life is not None:
-                    metric_cards(
-                        [
+                    cards = [
+                        {
+                            "label": f"Shelf life thăm dò @ {proj.temp_c:g}°C (tháng)",
+                            "value": f"{proj.shelf_life:.2f}",
+                            "hint": f"{proj.kinetics_order}-order mean crossing",
+                            "tone": "warn",
+                        },
+                        {
+                            "label": "k dùng để dự phóng",
+                            "value": f"{proj.rate_k:.6g}",
+                            "tone": "neutral",
+                        },
+                    ]
+                    if proj.shelf_life_ci_low is not None:
+                        cards.append(
                             {
-                                "label": f"Shelf life thăm dò @ {proj.temp_c:g}°C (tháng)",
-                                "value": f"{proj.shelf_life:.2f}",
-                                "hint": "Zero-order mean crossing",
-                                "tone": "warn",
-                            },
-                            {
-                                "label": "k dùng để dự phóng",
-                                "value": f"{proj.rate_k:.6g}",
-                                "tone": "neutral",
-                            },
-                        ]
-                    )
+                                "label": "Band từ k CI (tháng)",
+                                "value": f"{proj.shelf_life_ci_low:.2f}–{proj.shelf_life_ci_high:.2f}",
+                                "tone": "info",
+                            }
+                        )
+                    metric_cards(cards)
         else:
             st.warning(arr.message)
 
@@ -742,9 +1031,17 @@ elif step.startswith("2 ·"):
 # ===========================================================================
 elif step.startswith("3 ·"):
     section_header("3", "Dữ liệu", "Data")
+    callout(
+        "Chỉnh sửa được <b>giữ trong session_state</b> khi chuyển bước. "
+        "Chỉ ghi đè khi bấm <b>Load / Upload</b> có chủ đích. "
+        "Checklist: edit Data → Model → quay lại Data vẫn giữ giá trị.",
+        kind="info",
+    )
+
     data_mode = st.radio(
         "Nguồn / Source",
         [
+            "Đang dùng / Current session data",
             "Sample: assay giảm (decreasing)",
             "Sample: impurity tăng (increasing)",
             "Sample: multi-batch",
@@ -756,23 +1053,65 @@ elif step.startswith("3 ·"):
         key="data_mode_radio",
     )
 
-    df = None
-    label = data_mode
-    default_spec = 90.0
-    default_dir = "decreasing"
+    def _commit_df(df_new, label, default_spec=90.0, default_dir="decreasing", force_cfg=True):
+        df_new = ensure_condition_type(df_new)
+        st.session_state["df"] = df_new
+        st.session_state["data_label"] = label
+        st.session_state["data_loaded_mode"] = label
+        st.session_state["default_spec"] = default_spec
+        st.session_state["default_dir"] = default_dir
+        st.session_state["spec_limit"] = float(default_spec)
+        st.session_state["direction"] = default_dir
+        st.session_state["analysis"] = None
+        names = _attribute_names(df_new)
+        _init_attr_configs(names, force=force_cfg)
 
-    if data_mode.startswith("Sample: assay"):
-        df = _load_sample("sample_assay_decreasing.csv")
-        default_spec, default_dir = 90.0, "decreasing"
-    elif data_mode.startswith("Sample: impurity"):
-        df = _load_sample("sample_impurity_increasing.csv")
-        default_spec, default_dir = 0.5, "increasing"
-    elif data_mode.startswith("Sample: multi-batch"):
-        df = _load_sample("sample_multibatch.csv")
-        default_spec, default_dir = 90.0, "decreasing"
-    elif data_mode.startswith("Sample: đa") or "multi-attribute" in data_mode:
-        df = _load_sample("sample_multi_attribute.csv")
-        default_spec, default_dir = 90.0, "decreasing"
+    # ---- Current session: show / edit persisted DF ----
+    if data_mode.startswith("Đang dùng"):
+        cur = st.session_state.get("df")
+        if cur is None or len(cur) == 0:
+            empty_state(
+                "Chưa có dữ liệu trong phiên",
+                "Chọn Sample / Upload / Manual và bấm Load.",
+                "📋",
+            )
+        else:
+            st.caption(f"Nguồn hiện tại: **{st.session_state.get('data_label') or 'session'}**")
+            edited_cur = st.data_editor(
+                cur,
+                num_rows="dynamic",
+                use_container_width=True,
+                key="session_df_editor",
+            )
+            if st.button("💾 Lưu chỉnh sửa bảng / Save table edits", key="save_session_df"):
+                try:
+                    prepared = prepare_dataframe(edited_cur)
+                    st.session_state["df"] = ensure_condition_type(prepared)
+                    _init_attr_configs(_attribute_names(st.session_state["df"]), force=False)
+                    st.success("Đã lưu chỉnh sửa / Edits saved to session.")
+                except Exception as exc:
+                    st.error(str(exc))
+
+    elif data_mode.startswith("Sample:"):
+        sample_map = {
+            "Sample: assay": ("sample_assay_decreasing.csv", 90.0, "decreasing"),
+            "Sample: impurity": ("sample_impurity_increasing.csv", 0.5, "increasing"),
+            "Sample: multi-batch": ("sample_multibatch.csv", 90.0, "decreasing"),
+            "Sample: đa": ("sample_multi_attribute.csv", 90.0, "decreasing"),
+        }
+        fname, dspec, ddir = None, 90.0, "decreasing"
+        for prefix, tup in sample_map.items():
+            if data_mode.startswith(prefix) or (
+                prefix == "Sample: đa" and "multi-attribute" in data_mode
+            ):
+                fname, dspec, ddir = tup
+                break
+        st.caption(f"Sample file: `data/{fname}` — chỉ nạp khi bấm nút bên dưới.")
+        if st.button("📥 Load sample vào phiên / Load sample", type="primary", key="load_sample_btn"):
+            _commit_df(_load_sample(fname), data_mode, dspec, ddir, force_cfg=True)
+            st.success("Đã nạp sample / Sample loaded.")
+            st.rerun()
+
     elif data_mode.startswith("Upload"):
         up = st.file_uploader(
             "Chọn file CSV hoặc Excel / Choose CSV or Excel",
@@ -788,6 +1127,8 @@ elif step.startswith("3 ·"):
                 raw = load_table(up)
                 shape = detect_data_shape(raw)
                 st.caption(f"Phát hiện dạng dữ liệu / Detected shape: **{shape}**")
+                df_up = None
+                label = f"Upload: {up.name}"
                 if shape == "wide":
                     cands = suggest_wide_response_columns(raw)
                     st.markdown("**Ánh xạ cột response → chỉ tiêu / Map response columns → attributes**")
@@ -805,16 +1146,19 @@ elif step.startswith("3 ·"):
                                 value=str(c).title(),
                                 key=f"wide_name_{c}",
                             )
-                    if selected and st.button("Áp dụng ánh xạ / Apply mapping", key="wide_apply"):
-                        df = wide_to_long(raw, col_map)
-                        label = f"Upload (wide): {up.name}"
-                    elif selected:
-                        # Auto-apply for convenience when names filled
-                        df = wide_to_long(raw, col_map)
+                    if selected:
+                        df_up = wide_to_long(raw, col_map)
                         label = f"Upload (wide): {up.name}"
                 else:
-                    df = prepare_dataframe(raw)
-                    label = f"Upload: {up.name}"
+                    df_up = prepare_dataframe(raw)
+                if df_up is not None and st.button(
+                    "📥 Load upload vào phiên / Load upload",
+                    type="primary",
+                    key="load_upload_btn",
+                ):
+                    _commit_df(df_up, label, 90.0, "decreasing", force_cfg=True)
+                    st.success("Đã nạp upload / Upload loaded.")
+                    st.rerun()
             except Exception as exc:
                 st.error(str(exc))
         else:
@@ -824,7 +1168,9 @@ elif step.startswith("3 ·"):
                 "(+ optional attribute) — or wide measurement columns.",
                 "📂",
             )
+
     else:
+        # Manual entry — persist editor frame in session_state
         entry_mode = st.radio(
             "Kiểu nhập / Entry type",
             ["Một chỉ tiêu / Single", "Nhiều chỉ tiêu / Multi-attribute"],
@@ -835,36 +1181,45 @@ elif step.startswith("3 ·"):
         st.caption(
             "Cột: **batch**, **time**, **response**, **condition**"
             + (" + **attribute**" if multi else "")
+            + " · bảng được giữ khi đổi bước."
         )
+        if st.session_state.get("manual_editor_df") is None:
+            st.session_state["manual_editor_df"] = make_empty_entry_frame(
+                8 if not multi else 12, multi_attribute=multi
+            )
+        # If user switches single/multi and columns mismatch, reset only on button
+        if st.button("↺ Reset bảng nhập tay / Reset manual table", key="reset_manual_tbl"):
+            st.session_state["manual_editor_df"] = make_empty_entry_frame(
+                8 if not multi else 12, multi_attribute=multi
+            )
+            st.rerun()
         edited = st.data_editor(
-            make_empty_entry_frame(8 if not multi else 12, multi_attribute=multi),
+            st.session_state["manual_editor_df"],
             num_rows="dynamic",
             use_container_width=True,
             key="manual_editor",
         )
-        try:
-            df = prepare_dataframe(edited)
-            label = "Manual entry" + (" (multi-attribute)" if multi else "")
-        except Exception as exc:
-            st.warning(str(exc))
-            df = None
+        st.session_state["manual_editor_df"] = edited
+        if st.button("📥 Load manual vào phiên / Load manual data", type="primary", key="load_manual_btn"):
+            try:
+                df_m = prepare_dataframe(edited)
+                _commit_df(
+                    df_m,
+                    "Manual entry" + (" (multi-attribute)" if multi else ""),
+                    90.0,
+                    "decreasing",
+                    force_cfg=True,
+                )
+                st.success("Đã nạp dữ liệu nhập tay / Manual data loaded.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
 
+    # ---- Always show current session summary if present ----
+    df = st.session_state.get("df")
     if df is not None and len(df) > 0:
-        prev_label = st.session_state.get("data_label")
-        df = ensure_condition_type(df)
-        st.session_state["df"] = df
-        st.session_state["data_label"] = label
         names = _attribute_names(df)
-        if prev_label != label:
-            st.session_state["default_spec"] = default_spec
-            st.session_state["default_dir"] = default_dir
-            st.session_state["spec_limit"] = float(default_spec)
-            st.session_state["direction"] = default_dir
-            st.session_state["analysis"] = None
-            _init_attr_configs(names, force=True)
-        else:
-            _init_attr_configs(names, force=False)
-
+        _init_attr_configs(names, force=False)
         attrs = list_attributes(df)
         ok_msgs = []
         if attrs:
@@ -889,18 +1244,16 @@ elif step.startswith("3 ·"):
         if not ok:
             st.error(msg)
         else:
-            st.success("Dữ liệu hợp lệ / Data ready for analysis.")
+            st.success("Dữ liệu hợp lệ trong phiên / Session data ready.")
             if attrs:
                 st.info("Chỉ tiêu phát hiện / Attributes: **" + "**, **".join(attrs) + "**")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        with st.expander("Xem dữ liệu phiên / Preview session data", expanded=data_mode.startswith("Đang dùng")):
+            st.dataframe(df, use_container_width=True, hide_index=True)
         callout(
-            "Tiếp theo: chuyển sang <b>4 · Mô hình / Model</b> để thiết lập spec, direction, transform "
-            "(theo từng chỉ tiêu nếu đa chỉ tiêu).",
+            "Tiếp theo: chuyển sang <b>4 · Mô hình / Model</b> rồi quay lại Data — "
+            "giá trị vẫn được giữ (session persistence).",
             kind="info",
         )
-    elif not data_mode.startswith("Upload"):
-        empty_state("Chưa có dữ liệu", "No data loaded yet. Choose a sample or enter values.", "📋")
-        st.session_state["df"] = None
 
 
 # ===========================================================================
@@ -933,6 +1286,7 @@ elif step.startswith("4 ·"):
             "Điều kiện bảo quản / Storage condition",
             conditions,
             index=conditions.index(cur_cond),
+            key="model_condition",
         )
     with c2:
         alpha = st.number_input(
@@ -942,6 +1296,7 @@ elif step.startswith("4 ·"):
             value=float(st.session_state.get("alpha", 0.05)),
             step=0.01,
             help="One-sided confidence level = 1−α for the mean bound.",
+            key="model_alpha",
         )
     with c3:
         t_max = st.number_input(
@@ -949,6 +1304,7 @@ elif step.startswith("4 ·"):
             min_value=12.0,
             max_value=240.0,
             value=float(st.session_state.get("t_max", 120.0)),
+            key="model_t_max",
         )
 
     st.session_state["condition"] = condition
@@ -1146,6 +1502,7 @@ elif step.startswith("5 ·"):
             pool_opts,
             index=pool_opts.index(pm_cur),
             disabled=(n_batches <= 1),
+            key="pool_mode_select",
         )
     with c2:
         alpha_pool = st.number_input(
@@ -1156,6 +1513,7 @@ elif step.startswith("5 ·"):
             step=0.01,
             help="ICH Q1E commonly uses a large α (e.g. 0.25) for poolability tests.",
             disabled=(n_batches <= 1),
+            key="pool_alpha",
         )
 
     st.session_state["pool_mode"] = pool_mode
@@ -1396,6 +1754,21 @@ elif step.startswith("6 ·"):
 # ===========================================================================
 elif step.startswith("7 ·"):
     section_header("7", "Báo cáo", "Report export")
+
+    # ----- P.8 pointer (full UI lives on dedicated step 8) -----
+    st.markdown("---")
+    st.info(
+        "📄 **P.8 HSĐK / ACTD ASEAN** — Mở mục **8 · P.8** trên sidebar để soạn thảo "
+        "và tải HTML/PDF (Demo vẫn dùng được khi chưa có phân tích)."
+    )
+    callout(
+        "Báo cáo P.8 đầy đủ nằm ở bước sidebar <b>8 · P.8 HSĐK / ACTD ASEAN</b>.",
+        kind="info",
+    )
+
+    st.markdown("---")
+    st.subheader("Báo cáo shelf-life ICH Q1E / Q1E shelf-life report")
+
     analysis = st.session_state.get("analysis")
     if analysis is None:
         empty_state(
@@ -1615,3 +1988,12 @@ elif step.startswith("7 ·"):
     with st.expander("Xem trước metadata / Preview meta", expanded=True):
         st.json(meta)
         st.dataframe(ma.summary, use_container_width=True, hide_index=True)
+
+
+# ===========================================================================
+# STEP 8 — P.8 HSĐK / ACTD ASEAN
+# ===========================================================================
+elif step.startswith("8 ·"):
+    _render_p8_page(st.session_state.get("analysis"))
+    st.stop()
+
